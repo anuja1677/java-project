@@ -1,45 +1,58 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
 import java.sql.*;
-import java.util.Scanner;
 
 public class BankingSystem {
-    public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
-        while(true) {
-            System.out.println("\n--- Simple Banking System ---");
-            System.out.println("1. Create Customer & Account");
-            System.out.println("2. Deposit");
-            System.out.println("3. Withdraw");
-            System.out.println("4. Check Balance");
-            System.out.println("5. Exit");
-            System.out.print("Choose an option: ");
-            int choice = sc.nextInt();
+    private JFrame frame;
+    private JTextField accountIdField, amountField;
+    private JTextArea outputArea;
 
-            switch(choice) {
-                case 1:
-                    createCustomerAndAccount(sc);
-                    break;
-                case 2:
-                    deposit(sc);
-                    break;
-                case 3:
-                    withdraw(sc);
-                    break;
-                case 4:
-                    checkBalance(sc);
-                    break;
-                case 5:
-                    System.out.println("Exiting...");
-                    System.exit(0);
-                default:
-                    System.out.println("Invalid choice!");
-            }
-        }
+    public BankingSystem() {
+        frame = new JFrame("Banking System");
+        frame.setSize(500, 400);
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setLayout(new BorderLayout());
+
+        // Panel for inputs
+        JPanel panel = new JPanel(new GridLayout(5, 2, 5, 5));
+
+        panel.add(new JLabel("Account ID:"));
+        accountIdField = new JTextField();
+        panel.add(accountIdField);
+
+        panel.add(new JLabel("Amount:"));
+        amountField = new JTextField();
+        panel.add(amountField);
+
+        JButton depositBtn = new JButton("Deposit");
+        JButton withdrawBtn = new JButton("Withdraw");
+        JButton checkBalanceBtn = new JButton("Check Balance");
+        JButton createAccountBtn = new JButton("Create Account");
+
+        panel.add(depositBtn);
+        panel.add(withdrawBtn);
+        panel.add(checkBalanceBtn);
+        panel.add(createAccountBtn);
+
+        frame.add(panel, BorderLayout.NORTH);
+
+        outputArea = new JTextArea();
+        outputArea.setEditable(false);
+        frame.add(new JScrollPane(outputArea), BorderLayout.CENTER);
+
+        // Button actions
+        depositBtn.addActionListener(e -> deposit());
+        withdrawBtn.addActionListener(e -> withdraw());
+        checkBalanceBtn.addActionListener(e -> checkBalance());
+        createAccountBtn.addActionListener(e -> createAccount());
+
+        frame.setVisible(true);
     }
 
-    private static void createCustomerAndAccount(Scanner sc) {
-        System.out.print("Enter customer name: ");
-        sc.nextLine();
-        String name = sc.nextLine();
+    private void createAccount() {
+        String name = JOptionPane.showInputDialog(frame, "Enter Customer Name:");
+        if(name == null || name.trim().isEmpty()) return;
 
         try(Connection conn = Database.getConnection()) {
             String sql1 = "INSERT INTO customers(name) VALUES(?)";
@@ -53,89 +66,107 @@ public class BankingSystem {
                 PreparedStatement ps2 = conn.prepareStatement(sql2);
                 ps2.setInt(1, customerId);
                 ps2.executeUpdate();
-                System.out.println("Account created successfully! Customer ID: " + customerId);
+                outputArea.append("Account created! Customer ID: " + customerId + "\n");
             }
         } catch(SQLException e) {
             e.printStackTrace();
+            outputArea.append("Error creating account!\n");
         }
     }
 
-    private static void deposit(Scanner sc) {
-        System.out.print("Enter account ID: ");
-        int accountId = sc.nextInt();
-        System.out.print("Enter amount to deposit: ");
-        double amount = sc.nextDouble();
-
-        try(Connection conn = Database.getConnection()) {
-            String sql = "SELECT balance FROM bank_accounts WHERE account_id=?";
-            PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setInt(1, accountId);
-            ResultSet rs = ps.executeQuery();
-            if(rs.next()) {
-                double balance = rs.getDouble("balance");
-                balance += amount;
-                String update = "UPDATE bank_accounts SET balance=? WHERE account_id=?";
-                PreparedStatement ps2 = conn.prepareStatement(update);
-                ps2.setDouble(1, balance);
-                ps2.setInt(2, accountId);
-                ps2.executeUpdate();
-                System.out.println("Deposited successfully. New balance: " + balance);
-            } else {
-                System.out.println("Account not found!");
+    private void deposit() {
+        try {
+            int accountId = Integer.parseInt(accountIdField.getText());
+            double amount = Double.parseDouble(amountField.getText());
+            if(amount <= 0) {
+                outputArea.append("Enter valid deposit amount.\n");
+                return;
             }
-        } catch(SQLException e) {
-            e.printStackTrace();
-        }
-    }
 
-    private static void withdraw(Scanner sc) {
-        System.out.print("Enter account ID: ");
-        int accountId = sc.nextInt();
-        System.out.print("Enter amount to withdraw: ");
-        double amount = sc.nextDouble();
-
-        try(Connection conn = Database.getConnection()) {
-            String sql = "SELECT balance FROM bank_accounts WHERE account_id=?";
-            PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setInt(1, accountId);
-            ResultSet rs = ps.executeQuery();
-            if(rs.next()) {
-                double balance = rs.getDouble("balance");
-                if(amount <= balance) {
-                    balance -= amount;
+            try(Connection conn = Database.getConnection()) {
+                String sql = "SELECT balance FROM bank_accounts WHERE account_id=?";
+                PreparedStatement ps = conn.prepareStatement(sql);
+                ps.setInt(1, accountId);
+                ResultSet rs = ps.executeQuery();
+                if(rs.next()) {
+                    double balance = rs.getDouble("balance") + amount;
                     String update = "UPDATE bank_accounts SET balance=? WHERE account_id=?";
                     PreparedStatement ps2 = conn.prepareStatement(update);
                     ps2.setDouble(1, balance);
                     ps2.setInt(2, accountId);
                     ps2.executeUpdate();
-                    System.out.println("Withdrawn successfully. New balance: " + balance);
+                    outputArea.append("Deposited successfully. New balance: " + balance + "\n");
                 } else {
-                    System.out.println("Insufficient balance!");
+                    outputArea.append("Account not found!\n");
                 }
-            } else {
-                System.out.println("Account not found!");
             }
+        } catch(NumberFormatException e) {
+            outputArea.append("Enter valid numbers!\n");
         } catch(SQLException e) {
             e.printStackTrace();
+            outputArea.append("Database error!\n");
         }
     }
 
-    private static void checkBalance(Scanner sc) {
-        System.out.print("Enter account ID: ");
-        int accountId = sc.nextInt();
+    private void withdraw() {
+        try {
+            int accountId = Integer.parseInt(accountIdField.getText());
+            double amount = Double.parseDouble(amountField.getText());
 
-        try(Connection conn = Database.getConnection()) {
-            String sql = "SELECT balance FROM bank_accounts WHERE account_id=?";
-            PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setInt(1, accountId);
-            ResultSet rs = ps.executeQuery();
-            if(rs.next()) {
-                System.out.println("Current Balance: " + rs.getDouble("balance"));
-            } else {
-                System.out.println("Account not found!");
+            try(Connection conn = Database.getConnection()) {
+                String sql = "SELECT balance FROM bank_accounts WHERE account_id=?";
+                PreparedStatement ps = conn.prepareStatement(sql);
+                ps.setInt(1, accountId);
+                ResultSet rs = ps.executeQuery();
+                if(rs.next()) {
+                    double balance = rs.getDouble("balance");
+                    if(amount > 0 && amount <= balance) {
+                        balance -= amount;
+                        String update = "UPDATE bank_accounts SET balance=? WHERE account_id=?";
+                        PreparedStatement ps2 = conn.prepareStatement(update);
+                        ps2.setDouble(1, balance);
+                        ps2.setInt(2, accountId);
+                        ps2.executeUpdate();
+                        outputArea.append("Withdrawn successfully. New balance: " + balance + "\n");
+                    } else {
+                        outputArea.append("Insufficient balance or invalid amount!\n");
+                    }
+                } else {
+                    outputArea.append("Account not found!\n");
+                }
             }
+        } catch(NumberFormatException e) {
+            outputArea.append("Enter valid numbers!\n");
         } catch(SQLException e) {
             e.printStackTrace();
+            outputArea.append("Database error!\n");
         }
+    }
+
+    private void checkBalance() {
+        try {
+            int accountId = Integer.parseInt(accountIdField.getText());
+            try(Connection conn = Database.getConnection()) {
+                String sql = "SELECT balance FROM bank_accounts WHERE account_id=?";
+                PreparedStatement ps = conn.prepareStatement(sql);
+                ps.setInt(1, accountId);
+                ResultSet rs = ps.executeQuery();
+                if(rs.next()) {
+                    double balance = rs.getDouble("balance");
+                    outputArea.append("Current balance: " + balance + "\n");
+                } else {
+                    outputArea.append("Account not found!\n");
+                }
+            }
+        } catch(NumberFormatException e) {
+            outputArea.append("Enter valid account ID!\n");
+        } catch(SQLException e) {
+            e.printStackTrace();
+            outputArea.append("Database error!\n");
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(BankingSystem::new);
     }
 }
